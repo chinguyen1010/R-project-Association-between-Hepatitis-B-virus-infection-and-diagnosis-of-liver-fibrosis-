@@ -1,0 +1,126 @@
+---
+title: "Shell R Code Hackathon"
+output: html_document
+date: "2025-10-18"
+editor_options: 
+  chunk_output_type: console
+---
+# Step 1: Install and load necessary packages
+```{r, include = FALSE}
+install.packages("ggplot2")
+install.packages("tableone")
+install.packages("caret")
+install.packages("table1")
+
+# Load packages into the R session
+library(dplyr)       # For data manipulation
+library(ggplot2)     # For data visualization
+library(tableone)    # For creating Table 1
+library(table1)
+```
+
+# Step 2: Load the data
+```{reading in data, include = FALSE}
+
+data <- readRDS( "/Users/chinguyen/Desktop/NHANES_1720.rds") #insert file path for data file here
+
+```
+
+# Step 3: Create a Table 1 (Descriptive statistics)
+```{table 1, echo = FALSE}
+
+# Creating a stratified Table 1 using the tableone package as an example (very basic, minimal troubleshooting needed)
+table1 <- CreateTableOne(vars = c("age", "sex", "marital_st", "edu_level"), strata = "race_ethn", data = data)
+print(table1)
+
+# Overall table 1 (table1 package)
+table1(~ sex + age + marital_st + edu_level + race_ethn + cntry_birth + duration_us + liver_cond + diabetes + hep_b_clinical + kidney_fail + hep_b_vaccine, data=data)
+
+# Table 1 stratified by another variable (table1 package)
+## Need to remove missing observations in the stratifying variable prior to making the table so the table can appear
+
+#data_mod <- na.exclude(data)
+
+colnames(data)
+
+data_use=data[,c("liver_cond","liver_fibrosis", "hep_b_core_ab","kidney_fail", "bmi", "diabetes")]
+
+data_use=data[,c("age","sex","liver_cond","liver_fibrosis", "hep_b_core_ab","kidney_fail", "bmi", "diabetes")]
+
+#data_use_comp <- na.exclude(data_use)
+
+#table(data_use_comp$hep_b_core_ab)
+
+table1(~hep_b_core_ab+liver_cond + liver_fibrosis + kidney_fail + bmi +
+       + diabetes | sex,
+       data = data_use)
+
+head(data_use)
+
+```
+
+# Step 4: Visualize the distributions of categorical variables
+```{r, echo = FALSE}
+# Examples for creating bar plots for sex and low grades (binary)
+
+# To exclude missing observations from the plot
+data_filtered <- data_use %>%
+  filter(!is.na(liver_fibrosis)&!is.na(hep_b_core_ab))
+
+ggplot(data_filtered, aes(x = liver_fibrosis)) + 
+  geom_bar(fill = "lightgreen") +
+  theme_minimal() +
+  labs(title = "Distribution of Outcome", x = "liver_fibrosis", y = "Count")
+
+table(data_use$hep_b_core_ab,data_use$liver_fibrosis)
+
+
+
+#Plotting the assosiation
+prop_df <- data_filtered %>%
+  group_by(liver_fibrosis) %>%
+  summarise(prop_y1 = mean(hep_b_core_ab == 1))  # proportion where y == 1
+ggplot(prop_df, aes(x = liver_fibrosis, y = prop_y1)) +
+  geom_col(fill = "lightgreen") +
+  theme_minimal() +
+  labs(
+    title = "Proportion between Hepatitis B virus infection and diagnosis liver_fibrosis status",
+    x = "Diagnosis of liver_fibrosis",
+    y = "Hepatitis B virus infection (hep_b_core_ab)"
+  ) +
+  scale_y_continuous(labels = scales::percent)
+
+chisq.test(data_use$hep_b_core_ab,data_use$liver_fibrosis)
+
+```
+
+# Step 5: Logistic Regression Analysis
+```{r, echo = FALSE}
+
+# Fit a logistic regression model
+logit_model <- glm(liver_fibrosis ~ hep_b_core_ab, data = data_use, family = binomial())
+
+# Summary of the model (coefficients, p-values, etc.)
+summary(logit_model)
+
+# Exponentiate estimates to get ORs and 95% CIs
+exp(coef(logit_model))
+exp(confint(logit_model))
+
+
+
+#Regression Model 2: Adding control variables improves our model and controls for confounding
+OR_adj <- glm(
+  liver_fibrosis ~ hep_b_core_ab + age + factor(sex),
+  data = data_use,
+  family = binomial(link = "logit")
+)
+#extract log-odds estimates.
+exp(coef(OR_adj))
+
+exp(confint(OR_adj))
+
+
+summary(OR_adj)
+
+```
